@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tautulli → Letterboxd</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #030712; color: #fff; font-family: system-ui, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 1rem; padding: 1.5rem; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 1.5rem; }
+    .header { text-align: center; }
+    .header .icon { font-size: 2.5rem; }
+    .header h1 { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; }
+    .header p { color: #6b7280; font-size: .85rem; margin-top: .25rem; }
+    .section-label { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #34d399; margin-bottom: .75rem; }
+    .field { display: flex; flex-direction: column; gap: .5rem; }
+    .field label { font-size: .75rem; color: #9ca3af; }
+    input, select { width: 100%; background: #1f2937; border: 1px solid #374151; border-radius: .5rem; padding: .5rem .75rem; color: #fff; font-size: .875rem; outline: none; transition: border-color .2s; }
+    input:focus, select:focus { border-color: #34d399; }
+    input::placeholder { color: #4b5563; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .hint { font-size: .7rem; color: #4b5563; }
+    button { width: 100%; padding: .6rem 1rem; border: none; border-radius: .5rem; font-weight: 600; font-size: .875rem; cursor: pointer; transition: background .2s; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-green { background: #059669; color: #fff; }
+    .btn-green:hover:not(:disabled) { background: #10b981; }
+    .btn-blue { background: #2563eb; color: #fff; }
+    .btn-blue:hover:not(:disabled) { background: #3b82f6; }
+    .log { border-radius: .5rem; padding: 1rem; font-size: .8rem; font-family: monospace; white-space: pre-wrap; line-height: 1.5; }
+    .log.ok  { background: #1f2937; border: 1px solid #374151; color: #d1d5db; }
+    .log.err { background: #1c0a0a; border: 1px solid #7f1d1d; color: #fca5a5; }
+    .log.warn{ background: #1c1500; border: 1px solid #78350f; color: #fde68a; }
+    .link-btn { display: block; text-align: center; background: #064e3b; border: 1px solid #065f46; border-radius: .5rem; padding: .75rem; color: #34d399; font-weight: 600; font-size: .875rem; text-decoration: none; transition: background .2s; }
+    .link-btn:hover { background: #065f46; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="icon">🎬</div>
+    <h1>Tautulli → Letterboxd</h1>
+    <p>Export your Plex watch history as a Letterboxd-compatible CSV</p>
+  </div>
+
+  <!-- Step 1 -->
+  <div>
+    <div class="section-label">1. Connection</div>
+    <div class="field" style="gap:.75rem">
+      <input id="url" type="text" placeholder="Tautulli URL  (e.g. http://192.168.1.10:8181)" />
+      <input id="key" type="password" placeholder="API key" />
+      <button class="btn-green" id="connectBtn" onclick="connect()">Connect to Tautulli</button>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div id="step2" class="hidden">
+    <div class="section-label">2. User &amp; Date Range</div>
+    <div class="field" style="gap:.75rem">
+      <select id="userSelect"><option value="">— Select user —</option></select>
+      <div class="row">
+        <div class="field"><label>From date</label><input type="date" id="start" /></div>
+        <div class="field"><label>To date</label><input type="date" id="end" /></div>
+      </div>
+      <p class="hint">Leave dates empty to export your entire watch history.</p>
+      <label style="display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:#9ca3af;cursor:pointer;">
+        <input type="checkbox" id="dedupe" style="width:auto;accent-color:#34d399;" />
+        Remove re-watches (keep only first watch of each film)
+      </label>
+      <button class="btn-blue" id="exportBtn" onclick="exportCsv()">⬇️  Fetch &amp; Export CSV</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div id="log" class="hidden"></div>
+
+  <!-- Letterboxd link -->
+  <a id="lbLink" href="https://letterboxd.com/import/" target="_blank" class="link-btn hidden">
+    Open Letterboxd Import →
+  </a>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function showLog(msg, type = "ok") {
+  const el = $("log");
+  el.className = `log ${type}`;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+async function tautulli(cmd, params = {}) {
+  const base = $("url").value.replace(/\/$/, "");
+  const key  = $("key").value;
+  const q    = new URLSearchParams({ apikey: key, cmd, ...params });
+  const res  = await fetch(`${base}/api/v2?${q}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.response?.result !== "success")
+    throw new Error(json.response?.message || "Unknown API error");
+  return json.response.data;
+}
+
+function fmt(ts) {
+  if (!ts) return "";
+  return new Date(ts * 1000).toISOString().split("T")[0];
+}
+
+async function connect() {
+  const btn = $("connectBtn");
+  btn.disabled = true;
+  btn.textContent = "Connecting...";
+  try {
+    const data = await tautulli("get_users");
+    const users = (data || []).filter(u => u.user_id && String(u.user_id) !== "0");
+    const sel = $("userSelect");
+    sel.innerHTML = '<option value="">— Select user —</option>';
+    users.forEach(u => {
+      const o = document.createElement("option");
+      o.value = u.user_id;
+      o.textContent = u.friendly_name || u.username;
+      sel.appendChild(o);
+    });
+    $("step2").classList.remove("hidden");
+    showLog(`✅ Connected! Found ${users.length} user(s).`);
+    btn.textContent = "✓ Connected – Reconnect";
+  } catch (e) {
+    showLog(
+      `❌ Error: ${e.message}\n\nTips:\n• Check that the URL is correct (e.g. http://192.168.1.10:8181)\n• Check your API key under Tautulli → Settings → Web Interface\n• Make sure Tautulli is reachable from this machine`,
+      "err"
+    );
+    btn.textContent = "Connect to Tautulli";
+  }
+  btn.disabled = false;
+}
+
+async function exportCsv() {
+  const userId = $("userSelect").value;
+  if (!userId) { showLog("⚠️ Please select a user first.", "warn"); return; }
+
+  const btn = $("exportBtn");
+  btn.disabled = true;
+  $("lbLink").classList.add("hidden");
+
+  const movies = [];
+  let offset = 0;
+  const pageSize = 1000;
+
+  try {
+    while (true) {
+      const params = { user_id: userId, media_type: "movie", length: pageSize, start: offset };
+      const s = $("start").value;
+      const e = $("end").value;
+      if (s) params.after  = s;
+      if (e) params.before = e;
+
+      showLog(`⏳ Fetching... ${movies.length} movies retrieved so far`);
+      btn.textContent = `Fetching... (${movies.length} movies)`;
+
+      const data = await tautulli("get_history", params);
+      const rows = data?.data || [];
+      movies.push(...rows);
+      if (rows.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    if (movies.length === 0) {
+      showLog("⚠️ No movies found for the selected date range.", "warn");
+      btn.disabled = false;
+      btn.textContent = "⬇️  Fetch & Export CSV";
+      return;
+    }
+
+    // Always remove exact same-day duplicates (same title + year + date)
+    const seenDay = new Set();
+    let unique = movies.filter(m => {
+      const k = `${m.title}|${m.year}|${fmt(m.date || m.stopped)}`;
+      if (seenDay.has(k)) return false;
+      seenDay.add(k);
+      return true;
+    });
+
+    // Optionally remove re-watches (same title + year, any date)
+    if ($("dedupe").checked) {
+      const seenFilm = new Set();
+      unique = unique.filter(m => {
+        const k = `${m.title}|${m.year}`;
+        if (seenFilm.has(k)) return false;
+        seenFilm.add(k);
+        return true;
+      });
+    }
+
+    const csvRows = unique.map(m => {
+      const title = (m.title || "").replace(/"/g, '""');
+      return `"${title}",${m.year || ""},${fmt(m.date || m.stopped)}`;
+    });
+
+    const csv = ["Title,Year,WatchedDate", ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "letterboxd_import.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    const dupes = movies.length - unique.length;
+    const dupeNote = $("dedupe").checked && dupes > 0 ? ` (${dupes} re-watch(es) removed)` : "";
+    showLog(`✅ Exported ${unique.length} movie(s)${dupeNote}.\n\nFile downloaded. Head to letterboxd.com/import to upload it.`);
+    $("lbLink").classList.remove("hidden");
+  } catch (e) {
+    showLog(`❌ Export error: ${e.message}`, "err");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "⬇️  Fetch & Export CSV";
+}
+</script>
+</body>
+</html>
