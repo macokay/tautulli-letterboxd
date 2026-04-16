@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest a new feature or improvement
+title: "[FR]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    validations:
+      required: true
+    attributes:
+      label: Describe the feature
+  - type: textarea
+    attributes:
+      label: Problem it solves
+  - type: textarea
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    attributes:
+      label: Additional context
