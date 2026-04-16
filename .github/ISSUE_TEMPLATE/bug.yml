@@ -1,0 +1,38 @@
+name: Report a bug
+description: Report an issue
+labels: ["bug"]
+assignees:
+  - macokay
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is for bug reports only.
+  - type: textarea
+    validations:
+      required: true
+    attributes:
+      label: Describe the issue
+      description: What were you trying to do and what happened?
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    attributes:
+      label: Expected behaviour
+  - type: textarea
+    attributes:
+      label: Console errors
+      description: Browser DevTools (F12 → Console) — paste relevant errors.
+      render: txt
+  - type: input
+    attributes:
+      label: Browser + OS
+      placeholder: "Chrome 124 / macOS 15"
+  - type: textarea
+    attributes:
+      label: Additional information
