@@ -47,7 +47,7 @@
   <div>
     <div class="section-label">1. Connection</div>
     <div class="field" style="gap:.75rem">
-      <input id="url" type="text" placeholder="Tautulli URL  (e.g. http://192.168.1.10:8181)" />
+      <input id="url" type="text" placeholder="Tautulli URL  (e.g. http://your-server:8181)" />
       <input id="key" type="password" placeholder="API key" />
       <button class="btn-green" id="connectBtn" onclick="connect()">Connect to Tautulli</button>
     </div>
@@ -127,7 +127,7 @@ async function connect() {
     btn.textContent = "✓ Connected – Reconnect";
   } catch (e) {
     showLog(
-      `❌ Error: ${e.message}\n\nTips:\n• Check that the URL is correct (e.g. http://192.168.1.10:8181)\n• Check your API key under Tautulli → Settings → Web Interface\n• Make sure Tautulli is reachable from this machine`,
+      `❌ Error: ${e.message}\n\nTips:\n• Check that the URL is correct (e.g. http://your-server:8181)\n• Check your API key under Tautulli → Settings → Web Interface\n• Make sure Tautulli is reachable from this machine`,
       "err"
     );
     btn.textContent = "Connect to Tautulli";
