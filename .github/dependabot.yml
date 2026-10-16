@@ -1,0 +1,8 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    # security updates only: version-update PRs stay off to avoid notification noise
+    open-pull-requests-limit: 0
